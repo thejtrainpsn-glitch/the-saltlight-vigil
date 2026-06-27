@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Saltlight Vigil</title>
+<style>
+  :root{
+    --void:#0a0a0c;
+    --void-2:#111114;
+    --fog:#3a5c4f;
+    --fog-bright:#6b9c87;
+    --rust:#5c2a2a;
+    --rust-bright:#a13f3f;
+    --bone:#cfc9bb;
+    --bone-dim:#8a8578;
+    --ink:#050506;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;width:100%;height:100%;overflow:hidden;
+    background:var(--ink);
+    font-family:'Courier New',monospace;
+    color:var(--bone);
+    cursor:default;
+    user-select:none;
+  }
+  #app{
+    position:relative;
+    width:100vw;height:100vh;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--ink);
+  }
+  #gameCanvas{
+    background:#000;
+    image-rendering:pixelated;
+    display:block;
+  }
+  .display-face{
+    font-family:'Georgia','Cormorant Garamond',serif;
+    letter-spacing:0.04em;
+  }
+
+  /* ---------- Overlay screens ---------- */
+  .screen{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 30%, #15151a 0%, var(--void) 60%, var(--ink) 100%);
+    z-index:50;
+    animation:fadeIn 0.6s ease;
+  }
+  .screen.hidden{display:none;}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+
+  .grain{
+    position:absolute;inset:0;pointer-events:none;
+    opacity:0.05;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode:overlay;
+    z-index:200;
+  }
+
+  .vignette{
+    position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 220px 80px rgba(0,0,0,0.85);
+    z-index:150;
+  }
+
+  /* ---------- Title screen ---------- */
+  #titleScreen .lighthouse-glow{
+    position:absolute;
+    width:3px;height:140px;
+    top:8%;
+    background:linear-gradient(to bottom, rgba(107,156,135,0.0), rgba(107,156,135,0.55), rgba(107,156,135,0.0));
+    filter:blur(6px);
+    animation:sweep 7s linear infinite;
+    transform-origin:top center;
+  }
+  @keyframes sweep{
+    0%{transform:rotate(-35deg);}
+    50%{transform:rotate(35deg);}
+    100%{transform:rotate(-35deg);}
+  }
+  .title-block{
+    text-align:center;
+    z-index:10;
+    margin-bottom:48px;
+  }
+  .title-eyebrow{
+    font-size:11px;
+    letter-spacing:0.35em;
+    color:var(--bone-dim);
+    text-transform:uppercase;
+    margin-bottom:14px;
+  }
+  .title-main{
+    font-size:clamp(40px,7vw,72px);
+    font-weight:600;
+    color:var(--bone);
+    text-shadow:0 0 30px rgba(107,156,135,0.25), 0 0 2px rgba(0,0,0,0.8);
+    margin:0;
+    letter-spacing:0.05em;
+  }
+  .title-sub{
+    margin-top:10px;
+    font-size:13px;
+    color:var(--fog-bright);
+    letter-spacing:0.15em;
+    font-family:'Courier New',monospace;
+  }
+
+  .menu-list{
+    display:flex;flex-direction:column;
+    gap:4px;
+    z-index:10;
+    width:min(360px,80vw);
+  }
+  .menu-btn{
+    background:transparent;
+    border:1px solid transparent;
+    color:var(--bone-dim);
+    font-family:'Courier New',monospace;
+    font-size:16px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    padding:12px 18px;
+    text-align:left;
+    cursor:pointer;
+    position:relative;
+    transition:color 0.15s ease, border-color 0.15s ease, padding-left 0.15s ease;
+  }
+  .menu-btn::before{
+    content:"";
+    position:absolute;left:0;top:0;bottom:0;width:2px;
+    background:var(--fog-bright);
+    opacity:0;
+    transition:opacity 0.15s ease;
+  }
+  .menu-btn:hover, .menu-btn:focus, .menu-btn.focused{
+    color:var(--bone);
+    padding-left:26px;
+    outline:none;
+  }
+  .menu-btn:hover::before, .menu-btn:focus::before, .menu-btn.focused::before{
+    opacity:1;
+  }
+  .menu-btn .arrow{
+    opacity:0;
+    margin-right:8px;
+    transition:opacity 0.15s ease;
+  }
+  .menu-btn:hover .arrow, .menu-btn:focus .arrow, .menu-btn.focused .arrow{opacity:1;}
+
+  .footer-tag{
+    position:absolute;bottom:18px;left:0;right:0;
+    text-align:center;
+    font-size:10px;
+    color:#454540;
+    letter-spacing:0.1em;
+    z-index:10;
+  }
+  .footer-tag .badge{
+    color:var(--fog-bright);
+    border:1px solid #2c3b35;
+    padding:2px 8px;
+    border-radius:2px;
+    margin-left:8px;
+  }
+
+  /* ---------- Panel (settings/controls) ---------- */
+  .panel{
+    width:min(640px,86vw);
+    max-height:80vh;
+    background:linear-gradient(180deg,#13131600,#0d0d0f 8%);
+    border:1px solid #25251f;
+    padding:36px 40px;
+    z-index:10;
+    overflow-y:auto;
+  }
+  .panel::-webkit-scrollbar{width:6px;}
+  .panel::-webkit-scrollbar-thumb{background:#2c3b35;}
+  .panel-title{
+    font-size:26px;
+    color:var(--bone);
+    margin:0 0 4px 0;
+    letter-spacing:0.08em;
+  }
+  .panel-sub{
+    font-size:11px;
+    color:var(--bone-dim);
+    letter-spacing:0.1em;
+    margin-bottom:28px;
+    text-transform:uppercase;
+  }
+  .field-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 0;
+    border-bottom:1px solid #1c1c18;
+    gap:20px;
+  }
+  .field-label{
+    font-size:13px;
+    color:var(--bone-dim);
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+  }
+  .field-control{
+    display:flex;align-items:center;gap:10px;
+  }
+  .seg-btn-group{display:flex;border:1px solid #2c3b35;}
+  .seg-btn{
+    background:transparent;border:none;color:var(--bone-dim);
+    font-family:'Courier New',monospace;font-size:12px;letter-spacing:0.08em;
+    padding:7px 14px;cursor:pointer;text-transform:uppercase;
+    border-right:1px solid #2c3b35;
+  }
+  .seg-btn:last-child{border-right:none;}
+  .seg-btn.active{background:var(--fog);color:#0a0a0c;}
+  .slider-wrap{display:flex;align-items:center;gap:10px;}
+  input[type="range"]{
+    -webkit-appearance:none;
+    width:140px;height:2px;
+    background:#2c3b35;
+    outline:none;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:12px;height:12px;border-radius:50%;
+    background:var(--fog-bright);
+    cursor:pointer;
+    box-shadow:0 0 6px rgba(107,156,135,0.6);
+  }
+  .slider-val{font-size:12px;color:var(--bone-dim);min-width:34px;text-align:right;}
+
+  .panel-back{
+    margin-top:28px;
+    background:transparent;border:1px solid #2c3b35;color:var(--fog-bright);
+    font-family:'Courier New',monospace;font-size:13px;letter-spacing:0.1em;
+    text-transform:uppercase;padding:10px 22px;cursor:pointer;
+  }
+  .panel-back:hover{background:var(--fog);color:#0a0a0c;}
+
+  /* Controls diagram */
+  .controls-toggle{display:flex;gap:8px;margin-bottom:22px;}
+  .device-panel{display:none;}
+  .device-panel.active{display:block;animation:fadeIn 0.3s ease;}
+  .key-row{display:flex;gap:10px;align-items:center;margin-bottom:14px;}
+  .key{
+    width:34px;height:34px;border:1px solid #3a4a42;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;color:var(--bone);
+    background:#14181a;
+  }
+  .key.wide{width:auto;padding:0 14px;}
+  .key-desc{font-size:12px;color:var(--bone-dim);letter-spacing:0.04em;}
+  .wasd-grid{
+    display:grid;grid-template-columns:36px 36px 36px;grid-template-rows:36px 36px;
+    gap:3px;margin-right:14px;
+  }
+  .wasd-grid .key:nth-child(1){grid-column:2;}
+  .wasd-grid .key:nth-child(2){grid-column:1;}
+  .wasd-grid .key:nth-child(3){grid-column:2;}
+  .wasd-grid .key:nth-child(4){grid-column:3;}
+
+  .pad-diagram{display:flex;align-items:center;gap:18px;margin-bottom:6px;}
+  .pad-svg-label{font-size:11px;color:var(--bone-dim);margin-top:6px;letter-spacing:0.06em;}
+
+  /* ---------- HUD ---------- */
+  #hud{
+    position:absolute;inset:0;pointer-events:none;z-index:40;
+    display:none;
+  }
+  #hud.active{display:block;}
+  .hud-bottom-left{
+    position:absolute;left:22px;bottom:22px;
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .battery-wrap{
+    display:flex;align-items:center;gap:8px;
+  }
+  .battery-icon{
+    width:54px;height:22px;border:2px solid var(--bone-dim);position:relative;
+    padding:2px;
+  }
+  .battery-icon::after{
+    content:"";position:absolute;right:-5px;top:6px;width:3px;height:10px;background:var(--bone-dim);
+  }
+  .battery-fill{height:100%;background:var(--fog-bright);transition:width 0.3s linear, background 0.3s linear;}
+  .battery-label{font-size:10px;color:var(--bone-dim);letter-spacing:0.08em;}
+  .prompt-bottom{
+    position:absolute;left:50%;bottom:60px;transform:translateX(-50%);
+    font-size:13px;color:var(--bone);
+    background:rgba(8,8,9,0.7);
+    padding:8px 16px;
+    border:1px solid #2c3b35;
+    letter-spacing:0.05em;
+    display:none;
+    white-space:nowrap;
+  }
+  .prompt-bottom.show{display:flex;align-items:center;gap:10px;}
+  .prompt-key{
+    border:1px solid var(--bone-dim);width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;
+  }
+  #hudTop{
+    position:absolute;top:22px;left:0;right:0;text-align:center;
+  }
+  #objectiveText{
+    font-size:12px;color:var(--bone-dim);letter-spacing:0.1em;text-transform:uppercase;
+    background:rgba(8,8,9,0.5);
+    display:inline-block;padding:6px 16px;
+    border-bottom:1px solid #2c3b35;
+  }
+  .input-indicator{
+    position:absolute;top:22px;right:22px;
+    font-size:10px;color:#454540;letter-spacing:0.08em;
+    text-transform:uppercase;
+  }
+  .input-indicator span{color:var(--fog-bright);}
+
+  /* ---------- Narrative / subtitle text ---------- */
+  #subtitle{
+    position:absolute;left:50%;bottom:120px;transform:translateX(-50%);
+    max-width:600px;text-align:center;
+    font-family:'Georgia',serif;font-style:italic;
+    font-size:18px;color:var(--bone);
+    text-shadow:0 2px 8px rgba(0,0,0,0.9);
+    opacity:0;transition:opacity 0.6s ease;
+    z-index:45;pointer-events:none;
+  }
+  #subtitle.show{opacity:1;}
+
+  /* ---------- Fade / letterbox for cinematics ---------- */
+  #cinematicFade{
+    position:absolute;inset:0;background:#000;z-index:300;
+    opacity:0;pointer-events:none;transition:opacity 1.2s ease;
+  }
+  #cinematicFade.active{opacity:1;}
+  .letterbox{
+    position:absolute;left:0;right:0;height:0;background:#000;z-index:60;
+    transition:height 0.8s ease;pointer-events:none;
+  }
+  #letterboxTop{top:0;}
+  #letterboxBottom{bottom:0;}
+  .letterbox.active{height:11vh;}
+
+  /* ---------- Pause menu ---------- */
+  #pauseScreen{z-index:90;background:rgba(5,5,6,0.88);}
+
+  /* ---------- End screens ---------- */
+  .end-title{
+    font-size:40px;letter-spacing:0.1em;margin-bottom:18px;
+  }
+  .end-title.death{color:var(--rust-bright);}
+  .end-title.win{color:var(--fog-bright);}
+  .end-body{
+    max-width:520px;text-align:center;font-family:Georgia,serif;font-style:italic;
+    color:var(--bone-dim);font-size:15px;line-height:1.7;margin-bottom:36px;
+  }
+
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+  <!-- ===== HUD ===== -->
+  <div id="hud">
+    <div id="hudTop"><div id="objectiveText">Find a way to light the lamp</div></div>
+    <div class="input-indicator">INPUT: <span id="inputDeviceLabel">KEYBOARD</span></div>
+    <div class="hud-bottom-left">
+      <div class="battery-wrap">
+        <div class="battery-icon"><div class="battery-fill" id="batteryFill" style="width:100%"></div></div>
+        <div class="battery-label" id="batteryLabel">LANTERN — 100%</div>
+      </div>
+    </div>
+    <div class="prompt-bottom" id="interactPrompt"><div class="prompt-key" id="interactKeyGlyph">E</div><span id="interactText">Interact</span></div>
+  </div>
+  <div id="subtitle"></div>
+  <div class="letterbox" id="letterboxTop"></div>
+  <div class="letterbox" id="letterboxBottom"></div>
+  <div id="cinematicFade"></div>
+
+  <!-- ===== Title Screen ===== -->
+  <div class="screen" id="titleScreen">
+    <div class="lighthouse-glow"></div>
+    <div class="title-block">
+      <div class="title-eyebrow">A SHORT HORROR — COASTAL ISOLATION</div>
+      <h1 class="title-main display-face">THE SALTLIGHT VIGIL</h1>
+      <div class="title-sub">the lamp must never go dark</div>
+    </div>
+    <div class="menu-list" id="mainMenuList">
+      <button class="menu-btn" data-action="play"><span class="arrow">▸</span>Play</button>
+      <button class="menu-btn" data-action="settings"><span class="arrow">▸</span>Settings</button>
+      <button class="menu-btn" data-action="controls"><span class="arrow">▸</span>Controls</button>
+      <button class="menu-btn" data-action="quit"><span class="arrow">▸</span>Quit</button>
+    </div>
+    <div class="footer-tag">USE ↑↓ OR MOUSE TO NAVIGATE, ENTER TO SELECT <span class="badge" id="gamepadBadge">NO CONTROLLER DETECTED</span></div>
+  </div>
+
+  <!-- ===== Settings Screen ===== -->
+  <div class="screen hidden" id="settingsScreen">
+    <div class="panel">
+      <div class="panel-title display-face">Settings</div>
+      <div class="panel-sub">Graphics &amp; Display</div>
+
+      <div class="field-row">
+        <div class="field-label">Visual Quality</div>
+        <div class="field-control seg-btn-group" id="qualityGroup">
+          <button class="seg-btn" data-val="low">Low</button>
+          <button class="seg-btn active" data-val="medium">Medium</button>
+          <button class="seg-btn" data-val="high">High</button>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">Resolution</div>
+        <div class="field-control seg-btn-group" id="resGroup">
+          <button class="seg-btn" data-val="960x540">960×540</button>
+          <button class="seg-btn active" data-val="1280x720">1280×720</button>
+          <button class="seg-btn" data-val="1600x900">1600×900</button>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">Film Grain</div>
+        <div class="field-control">
+          <div class="slider-wrap">
+            <input type="range" id="grainSlider" min="0" max="100" value="40">
+            <div class="slider-val" id="grainVal">40%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">Screen Shake</div>
+        <div class="field-control seg-btn-group" id="shakeGroup">
+          <button class="seg-btn active" data-val="on">On</button>
+          <button class="seg-btn" data-val="off">Off</button>
+        </div>
+      </div>
+
+      <div class="panel-sub" style="margin-top:30px;">Audio</div>
+      <div class="field-row">
+        <div class="field-label">Master Volume</div>
+        <div class="field-control">
+          <div class="slider-wrap">
+            <input type="range" id="volSlider" min="0" max="100" value="80">
+            <div class="slider-val" id="volVal">80%</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="panel-back" data-action="back-to-title">◂ Back</button>
+    </div>
+  </div>
+
+  <!-- ===== Controls Screen ===== -->
+  <div class="screen hidden" id="controlsScreen">
+    <div class="panel">
+      <div class="panel-title display-face">Controls</div>
+      <div class="panel-sub">Choose a device to view its layout</div>
+
+      <div class="controls-toggle">
+        <button class="seg-btn active" data-device="kbm" style="border:1px solid #2c3b35;">Keyboard &amp; Mouse</button>
+        <button class="seg-btn" data-device="pad" style="border:1px solid #2c3b35;">Controller</button>
+      </div>
+
+      <div class="device-panel active" id="kbmPanel">
+        <div class="key-row">
+          <div class="wasd-grid">
+            <div class="key">W</div><div class="key">A</div><div class="key">S</div><div class="key">D</div>
+          </div>
+          <div class="key-desc">Move — walk in any direction</div>
+        </div>
+        <div class="key-row"><div class="key">E</div><div class="key-desc">Interact with objects, doors, and items</div></div>
+        <div class="key-row"><div class="key wide">SHIFT</div><div class="key-desc">Hold to move quietly (slower, less noise)</div></div>
+        <div class="key-row"><div class="key wide">F</div><div class="key-desc">Toggle lantern on / off</div></div>
+        <div class="key-row"><div class="key wide">TAB</div><div class="key-desc">Open / close journal</div></div>
+        <div class="key-row"><div class="key wide">ESC</div><div class="key-desc">Pause</div></div>
+        <div class="key-row"><div class="key wide" style="width:60px;">MOUSE</div><div class="key-desc">Look / aim lantern direction</div></div>
+      </div>
+
+      <div class="device-panel" id="padPanel">
+        <div class="key-row"><div class="key" style="border-radius:50%;">●</div><div class="key-desc">Left Stick — move</div></div>
+        <div class="key-row"><div class="key" style="border-radius:50%;">●</div><div class="key-desc">Right Stick — aim lantern</div></div>
+        <div class="key-row"><div class="key wide">A / ✕</div><div class="key-desc">Interact with objects, doors, and items</div></div>
+        <div class="key-row"><div class="key wide">LT / L2</div><div class="key-desc">Hold to move quietly</div></div>
+        <div class="key-row"><div class="key wide">X / □</div><div class="key-desc">Toggle lantern on / off</div></div>
+        <div class="key-row"><div class="key wide">Y / △</div><div class="key-desc">Open / close journal</div></div>
+        <div class="key-row"><div class="key wide">START</div><div class="key-desc">Pause</div></div>
+        <div class="pad-svg-label">Prompts on-screen automatically switch to these glyphs once a controller input is detected.</div>
+      </div>
+
+      <button class="panel-back" data-action="back-to-title">◂ Back</button>
+    </div>
+  </div>
+
+  <!-- ===== Pause Screen ===== -->
+  <div class="screen hidden" id="pauseScreen">
+    <div class="title-block" style="margin-bottom:30px;">
+      <div class="title-eyebrow">PAUSED</div>
+      <h1 class="title-main display-face" style="font-size:40px;">The Lamp Waits</h1>
+    </div>
+    <div class="menu-list">
+      <button class="menu-btn" data-action="resume"><span class="arrow">▸</span>Resume</button>
+      <button class="menu-btn" data-action="settings-from-pause"><span class="arrow">▸</span>Settings</button>
+      <button class="menu-btn" data-action="controls-from-pause"><span class="arrow">▸</span>Controls</button>
+      <button class="menu-btn" data-action="quit-to-title"><span class="arrow">▸</span>Quit to Title</button>
+    </div>
+  </div>
+
+  <!-- ===== End Screens ===== -->
+  <div class="screen hidden" id="endScreen">
+    <div class="title-block">
+      <div class="title-eyebrow" id="endEyebrow">THE LAMP HAS GONE OUT</div>
+      <h1 class="end-title death display-face" id="endTitle">YOU ARE FOUND</h1>
+    </div>
+    <div class="end-body" id="endBody"></div>
+    <div class="menu-list">
+      <button class="menu-btn" data-action="retry"><span class="arrow">▸</span>Try Again</button>
+      <button class="menu-btn" data-action="quit-to-title"><span class="arrow">▸</span>Main Menu</button>
+    </div>
+  </div>
+
+  <div class="grain" id="grainOverlay"></div>
+  <div class="vignette"></div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
